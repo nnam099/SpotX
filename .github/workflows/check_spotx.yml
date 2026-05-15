@@ -1,0 +1,50 @@
+name: Check Spotx for the latest Spotify
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Spotx
+      shell: powershell
+      run: |
+        $jsonUrl = "https://raw.githubusercontent.com/LoaderSpot/table/refs/heads/main/table/versions.json"
+        $resp = Invoke-RestMethod -Uri $jsonUrl
+
+        # Use fullversion because installer names include architecture suffixes
+        $latestEntry = $resp.PSObject.Properties | Select-Object -First 1
+        if (-not $latestEntry) {
+          throw "No Spotify versions found in $jsonUrl"
+        }
+
+        $spotifyFullVersion = $latestEntry.Value.fullversion
+        if ([string]::IsNullOrWhiteSpace($spotifyFullVersion) -or $spotifyFullVersion -notmatch '^\d+\.\d+\.\d+\.\d+\.g[0-9a-f]{8}$') {
+          throw "Invalid Spotify fullversion for $($latestEntry.Name)"
+        }
+        
+        # Incoming parameters
+        $parameters = @{
+          Verbose = $true
+          new_theme = $true
+          version = $spotifyFullVersion
+          confirm_spoti_recomended_over = $true
+          cache_limit = 1000
+          block_update_on = $true
+          lyrics_stat = "spotify"
+          urlform_goofy = "https://docs.google.com/forms/formResponse"
+          idbox_goofy = "9999999"
+          podcasts_off = $true
+          adsections_off = $true
+          lyrics_block = $true
+        }
+        
+        # Run Spotx
+        $spotxUrl = "https://raw.githubusercontent.com/SpotX-Official/SpotX/refs/heads/main/run.ps1"
+        $spotxScript = [scriptblock]::Create((Invoke-WebRequest -UseBasicParsing -Uri $spotxUrl).Content)
+        & $spotxScript @parameters
